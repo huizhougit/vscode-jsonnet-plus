@@ -118,6 +118,10 @@ namespace workspace {
         .map(key => `--ext-str ${key}="${extStrsObj[key]}"`)
         .join(" ");
   }
+  
+  const expandPathVariables = (path: string): string => {
+    return path.replace(/\${workspaceFolder}/g, vs.workspace.workspaceFolders?.[0].uri.fsPath);
+  }
 
   export const libPaths = (): string => {
     const libPaths = vs.workspace.getConfiguration('jsonnet')["libPaths"];
@@ -138,8 +142,8 @@ namespace workspace {
     if (jsonnetExecutable != null) {
       (<string[]>libPaths).unshift(jsonnetExecutable);
     }
-
     return libPaths
+      .map(path => expandPathVariables(path))
       .map(path => `-J ${path}`)
       .join(" ");
   }
