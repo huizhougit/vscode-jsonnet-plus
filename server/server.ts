@@ -136,6 +136,7 @@ export const initializer = (
 export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
 ): void => {
+  console.log(change);
   if (
     change.settings == null || change.settings.jsonnet == null ||
     change.settings.jsonnet.libPaths == null
