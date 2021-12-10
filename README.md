@@ -45,6 +45,8 @@ in `settings.json`:
 * `jsonnet.fmtExecutablePath`: Tells the extension where to find the
   `jsonnetfmt` executable, if it's not on the `PATH`. (NOTE: This setting
   is always necessary on Windows.)
+* `jsonnet.fmtOptions`: Options that are passed when calling the
+  `jsonnetfmt` executable. E.g. `--indent 2 --string-style d --comment-style s --no-pad-arrays --pad-objects --pretty-field-names`.
 * `jsonnet.libPaths`: Additional paths to search for libraries when compiling Jsonnet code.
 * `jsonnet.outputFormat`: Preview output format: yaml or json (default is yaml).
 * `jsonnet.extStrs`: External strings to pass to `jsonnet` executable.

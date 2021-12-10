@@ -74,6 +74,11 @@
           "description": "Location of the `jsonnetfmt` executable.",
           "type": "string"
         },
+        "jsonnet.fmtOptions": {
+          "default": "",
+          "description": "Options for the `jsonnetfmt` executable. `jsonnetfmt --help` to see available options.",
+          "type": "string"
+        },
         "jsonnet.extStrs": {
           "default": null,
           "description": "External strings to pass to `jsonnet` executable.",

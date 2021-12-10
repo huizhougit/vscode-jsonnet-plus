@@ -8,7 +8,11 @@ export function activate(context: vscode.ExtensionContext) {
     "fmtExecutablePath"
   ] as string | undefined;
 
-  const formatter = new ExternalProcessJsonnetFormatter(fmtExecutablePath);
+  const fmtOptionsStr = vscode.workspace.getConfiguration("jsonnet")[
+    "fmtOptions"
+  ] as string;
+
+  const formatter = new ExternalProcessJsonnetFormatter(fmtExecutablePath, fmtOptionsStr);
 
   formattingProvider = vscode.languages.registerDocumentFormattingEditProvider(
     "jsonnet",
@@ -26,9 +30,8 @@ interface JsonnetFormatter {
 }
 
 class JsonnetDocumentFormattingProvider
-  implements vscode.DocumentFormattingEditProvider
-{
-  constructor(private formatter: JsonnetFormatter) {}
+  implements vscode.DocumentFormattingEditProvider {
+  constructor(private formatter: JsonnetFormatter) { }
 
   async provideDocumentFormattingEdits(
     document: vscode.TextDocument,
@@ -57,12 +60,13 @@ class JsonnetDocumentFormattingProvider
 }
 
 class ExternalProcessJsonnetFormatter implements JsonnetFormatter {
-  constructor(private binaryPath: string | undefined) {}
+  constructor(private binaryPath: string | undefined, private fmtOptionsStr: string) { }
 
   async format(text: string): Promise<string> {
+    var fmtOptions: string[] = this.fmtOptionsStr == '' ? [] : this.fmtOptionsStr.split(" ")
     const result = child_process.spawnSync(
       this.binaryPath ?? "jsonnetfmt",
-      ['-'],
+      [...fmtOptions, '-'],
       {
         shell: true,
         input: text,
@@ -70,7 +74,8 @@ class ExternalProcessJsonnetFormatter implements JsonnetFormatter {
     );
 
     if (result.status !== 0) {
-      throw new Error(`Invalid exit status ${result.status}`);
+      const err = result.stdout.toLocaleString()
+      throw new Error(`Invalid exit status ${result.status} \n${err}`);
     }
 
     if (result.error) {
