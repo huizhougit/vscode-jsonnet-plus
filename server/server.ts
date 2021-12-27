@@ -136,7 +136,6 @@ export const initializer = (
 export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
 ): void => {
-  console.log(change);
   if (
     change.settings == null || change.settings.jsonnet == null ||
     change.settings.jsonnet.libPaths == null
@@ -164,28 +163,28 @@ const positionToLocation = (
 const completionInfoToCompletionItem = (
   completionInfo: editor.CompletionInfo
 ): server.CompletionItem => {
-    let kindMapping: server.CompletionItemKind;
-    switch (completionInfo.kind) {
-      case "Field": {
-        kindMapping = server.CompletionItemKind.Field;
-        break;
-      }
-      case "Variable": {
-        kindMapping = server.CompletionItemKind.Variable;
-        break;
-      }
-      case "Method": {
-        kindMapping = server.CompletionItemKind.Method;
-        break;
-      }
-      default: throw new Error(
-        `Unrecognized completion type '${completionInfo.kind}'`);
+  let kindMapping: server.CompletionItemKind;
+  switch (completionInfo.kind) {
+    case "Field": {
+      kindMapping = server.CompletionItemKind.Field;
+      break;
     }
+    case "Variable": {
+      kindMapping = server.CompletionItemKind.Variable;
+      break;
+    }
+    case "Method": {
+      kindMapping = server.CompletionItemKind.Method;
+      break;
+    }
+    default: throw new Error(
+      `Unrecognized completion type '${completionInfo.kind}'`);
+  }
 
-    // Black magic type coercion. This allows us to avoid doing a
-    // deep copy over to a new `CompletionItem` object, and
-    // instead only re-assign the `kindMapping`.
-    const completionItem = (<server.CompletionItem>(<object>completionInfo));
-    completionItem.kind = kindMapping;
-    return completionItem;
+  // Black magic type coercion. This allows us to avoid doing a
+  // deep copy over to a new `CompletionItem` object, and
+  // instead only re-assign the `kindMapping`.
+  const completionItem = (<server.CompletionItem>(<object>completionInfo));
+  completionItem.kind = kindMapping;
+  return completionItem;
 }
