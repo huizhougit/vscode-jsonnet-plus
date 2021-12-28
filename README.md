@@ -46,6 +46,7 @@ in `settings.json`:
   `jsonnetfmt` executable, if it's not on the `PATH`. (NOTE: This setting
   is always necessary on Windows.)
 * `jsonnet.libPaths`: Additional paths to search for libraries when compiling Jsonnet code.
+  It suppports variable substitution: `${workspaceFolder}`.
 * `jsonnet.outputFormat`: Preview output format: yaml or json (default is yaml).
 * `jsonnet.extStrs`: External strings to pass to `jsonnet` executable.
 
