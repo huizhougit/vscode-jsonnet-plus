@@ -24,4 +24,4 @@ jobs:
 
       - run: npm ci
 
-      - run: npm vscode:prepublish
+      - run: npm run vscode:prepublish
