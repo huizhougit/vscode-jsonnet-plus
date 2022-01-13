@@ -3,6 +3,11 @@ All notable changes to the "Jsonnet NG" extension will be documented in this fil
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.2.1] 2022-01-13
+## Added
+- Allow variable substitution with ${workspaceFolder} in libPaths config
+- Flush cache on config chang
+
 ## [1.1.0] 2021-05-17
 ## Added
 - Preview button on editor toolbar
