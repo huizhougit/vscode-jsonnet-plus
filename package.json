@@ -30,7 +30,8 @@
     "compile": "npm run client:esbuild",
     "watch": "tsc -watch -p ./",
     "compile-site": "browserify ./out/site/main.js > ksonnet.js",
-    "vscode:prepublish": "npm run client:esbuild-release && npm run server:esbuild-release"
+    "vscode:prepublish": "npm run client:esbuild-release && npm run server:esbuild-release",
+    "deploy": "vsce publish --yarn"
   },
   "activationEvents": [
     "onLanguage:jsonnet",
