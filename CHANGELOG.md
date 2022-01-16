@@ -3,6 +3,10 @@ All notable changes to the "Jsonnet NG" extension will be documented in this fil
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.3.0] 2022-01-16
+## Added
+- Add settings for `jsonnetfmt` options
+
 ## [1.2.1] 2022-01-13
 ## Added
 - Allow variable substitution with ${workspaceFolder} in libPaths config
