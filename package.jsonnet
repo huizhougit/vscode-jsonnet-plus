@@ -26,9 +26,9 @@ package.Name(jsonnetLanguage.name) +
 package.DisplayName(jsonnetLanguage.displayName) +
 package.Description("Language support for Jsonnet") +
 package.Version("0.0.15") +
-package.Publisher("heptio") +
+package.Publisher("huizhougit") +
 package.License("SEE LICENSE IN 'LICENSE' file") +
-package.Homepage("https://github.com/heptio/vscode-jsonnet/blob/master/README.md") +
+package.Homepage("https://github.com/huizhougit/vscode-jsonnet/blob/master/README.md") +
 package.Category("Languages") +
 package.ActivationEvent(event.OnLanguage(jsonnetLanguage.name)) +
 package.ActivationEvent(event.OnCommand(previewToSide.command)) +
@@ -37,7 +37,7 @@ package.Main("./out/client/extension") +
 
 // Repository.
 package.repository.Default(
-  "git", "https://github.com/heptio/vscode-jsonnet.git") +
+  "git", "https://github.com/huizhougit/vscode-jsonnet.git") +
 
 // Engines.
 package.engines.VsCode("^1.10.0") +

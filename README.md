@@ -1,8 +1,7 @@
 # Jsonnet Support for Visual Studio Code
 
-Jsonnet NG is a fork of original extenstion from [heptio](https://github.com/heptio/vscode-jsonnet) 
-with some fixes and improvements. This fork created because the original 
-project was abandoned and archived.
+Jsonnet Plus is a fork of original extenstion from [Sebbia](https://github.com/Sebbia/vscode-jsonnet-ng) 
+with [kubecfg](https://github.com/kubecfg/kubecfg) support and text preview render change.
 
 Extension features:
 
@@ -24,6 +23,9 @@ Jsonnet command line tool (_e.g._, through `brew install jsonnet`). If
 you don't add the `jsonnet` executable to the `PATH` then you will
 need to customize `jsonnet.executablePath` in your `settings.json`, so
 that the extension knows where to find it.
+
+To enable the Jsonnet preview pane with [kubecfg](https://github.com/kubecfg/kubecfg),
+it is necessary to install it (_e.g._, through `brew install kubecfg`).
 
 After this, you can use the keybinding for `jsonnet.previewToSide` (by
 default this is `shift+ctrl+i`, or `shift+cmd+i` on macOS), and the
@@ -73,4 +75,4 @@ keys:
   to be (_i.e._, allows you to either output JSON or YAML).
 
 [jsonnet]: http://jsonnet.org/ "Jsonnet"
-[jsonnet-demo]: https://raw.githubusercontent.com/heptio/vscode-jsonnet/master/images/kube-demo.gif
+[jsonnet-demo]: https://raw.githubusercontent.com/huizhougit/vscode-jsonnet/master/images/kube-demo.gif

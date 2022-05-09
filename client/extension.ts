@@ -68,15 +68,15 @@ namespace register {
 
     // Expand Jsonnet, register errors as diagnostics with vscode, and
     // generate preview if a preview tab is open.
-    const preview = (doc: vs.TextDocument): void => {
-      if (doc.languageId === "jsonnet") {
+    const preview = (doc?: vs.TextDocument): void => {
+      if (doc?.languageId === "jsonnet") {
         const result = docProvider.cachePreview(doc);
         if (jsonnet.isRuntimeFailure(result)) {
           diagProvider.report(doc.uri, result.error);
         } else {
           diagProvider.clear(doc.uri);
         }
-        docProvider.update(jsonnet.canonicalPreviewUri(doc.uri));
+        docProvider.update(jsonnet.canonicalPreviewUri());
       }
     }
 
@@ -86,23 +86,24 @@ namespace register {
     context.subscriptions.push(vs.commands.registerCommand(
       'jsonnet.preview', () => display.previewJsonnet(docProvider, false)));
 
-    // Call `preview` any time we save or open a document.
+    // Call `preview` any time we save or open or activate a document.
     context.subscriptions.push(vs.workspace.onDidSaveTextDocument(preview));
-    context.subscriptions.push(vs.workspace.onDidOpenTextDocument(preview));
-    context.subscriptions.push(vs.workspace.onDidCloseTextDocument(doc => {
-      docProvider.delete(doc);
-    }));
-    context.subscriptions.push(vs.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('jsonnet')) {
-        docProvider.flushPreviewCache();
-      }
-    }));
+    context.subscriptions.push(vs.window.onDidChangeActiveTextEditor(e => preview(e?.document)));
 
     // Call `preview` when we open the editor.
     const active = vs.window.activeTextEditor;
     if (active != null) {
       preview(active.document);
     }
+
+    // Reopen `preview` when its content changed.
+    context.subscriptions.push(
+      vs.workspace.onDidChangeTextDocument((event) => {
+        if (event.document.uri.scheme == jsonnet.PREVIEW_SCHEME) {
+          display.openPreview(docProvider);
+        }
+      })
+    );
   }
 }
 
@@ -120,7 +121,7 @@ namespace workspace {
   }
   
   const expandPathVariables = (path: string): string => {
-    return path.replace(/\${workspaceFolder}/g, vs.workspace.workspaceFolders?.[0].uri.fsPath);
+    return path.replace(/\${workspaceFolder}/g, vs.workspace.workspaceFolders?.[0].uri.fsPath || "");
   }
 
   export const libPaths = (): string => {
@@ -215,30 +216,6 @@ namespace alert {
   }
 }
 
-namespace html {
-  export const body = (body: string): string => {
-    return `<html><body>${body}</body></html>`
-  }
-
-  export const codeLiteral = (code: string): string => {
-    return `<pre><code>${code}</code></pre>`
-  }
-
-  export const errorMessage = (message: string): string => {
-    return `<i><pre>${message}</pre></i>`;
-  }
-
-  export const prettyPrintObject = (
-    json: string, outputFormat: "json" | "yaml"
-  ): string => {
-    if (outputFormat == "yaml") {
-      return codeLiteral(yaml.safeDump(JSON.parse(json)));
-    } else {
-      return codeLiteral(JSON.stringify(JSON.parse(json), null, 4));
-    }
-  }
-}
-
 namespace jsonnet {
   export let executable = "jsonnet";
   export const PREVIEW_SCHEME = "jsonnet-preview";
@@ -287,17 +264,8 @@ namespace jsonnet {
       clientOptions);
   }
 
-  export const canonicalPreviewUri = (fileUri: vs.Uri) => {
-    return fileUri.with({
-      scheme: jsonnet.PREVIEW_SCHEME,
-      path: `${fileUri.path}.rendered`,
-      query: fileUri.toString(),
-    });
-  }
-
-  export const fileUriFromPreviewUri = (previewUri: vs.Uri): vs.Uri => {
-    const file = previewUri.fsPath.slice(0, -(".rendered".length));
-    return vs.Uri.file(file);
+  export const canonicalPreviewUri = () => {
+    return vs.Uri.from({ scheme: PREVIEW_SCHEME, path: "jsonnet.preview" });
   }
 
   // RuntimeError represents a runtime failure in a Jsonnet program.
@@ -312,36 +280,28 @@ namespace jsonnet {
   }
 
   // DocumentProvider compiles Jsonnet code to JSON or YAML, and
-  // provides that to vscode for rendering in the preview pane.
-  //
-  // DESIGN NOTES: This class optionally exposes `cachePreview` and
-  // `delete` so that the caller can get the results of the document
-  // compilation for purposes of (e.g.) reporting diagnostic issues.
+  // provides that to vscode for rendering
   export class DocumentProvider implements vs.TextDocumentContentProvider {
-    public provideTextDocumentContent = (
-      previewUri: vs.Uri,
-    ): Thenable<string> => {
-      const sourceUri = vs.Uri.parse(previewUri.query);
-      return vs.workspace.openTextDocument(sourceUri)
-        .then(sourceDoc => {
-          const result = this.previewCache.has(sourceUri.toString())
-            ? this.previewCache.get(sourceUri.toString())
-            : this.cachePreview(sourceDoc);
-          if (isRuntimeFailure(result)) {
-            return html.body(html.errorMessage(result.error));
-          }
-          const outputFormat = workspace.outputFormat();
-          return html.body(html.prettyPrintObject(result, outputFormat));
-        });
-    }
+    public provideTextDocumentContent = (previewUri: vs.Uri): string => {
+      if (isRuntimeFailure(this.content)) {
+        return this.content.error;
+      }
 
-    public flushPreviewCache = () => {
-      this.previewCache = this.previewCache.clear();
-    }
+      // kubecfg uses --- to separate resources
+      let raw = this.content as string;
+      if (raw.startsWith("---")) {
+        raw = raw.replace("---", "[").replaceAll("---", ",") + "]";
+      }
+
+      const outputFormat = workspace.outputFormat();
+      return outputFormat == "yaml"
+        ? yaml.safeDump(JSON.parse(raw))
+        : JSON.stringify(JSON.parse(raw), null, 2);
+    };
 
     public cachePreview = (sourceDoc: vs.TextDocument): RuntimeFailure | string => {
       const sourceUri = sourceDoc.uri.toString();
-      const sourceFile = sourceDoc.uri.fsPath
+      const sourceFile = sourceDoc.uri.fsPath;
 
       let codePaths = '';
 
@@ -367,25 +327,24 @@ namespace jsonnet {
         // Compile the preview Jsonnet file.
         const extStrs = workspace.extStrs();
         const libPaths = workspace.libPaths();
-        const jsonOutput = execSync(
-          `${jsonnet.executable} ${libPaths} ${extStrs} ${codePaths} ${sourceFile}`
-        ).toString();
-
-        // Cache.
-        this.previewCache = this.previewCache.set(sourceUri, jsonOutput);
-
-        return jsonOutput;
+        const args = `${libPaths} ${extStrs} ${codePaths} ${sourceFile}`;
+        try {
+          this.content = execSync(`${jsonnet.executable} ${args}`).toString();
+        } catch (e) {
+          // If jsonnet doesn't work, let's try kubecfg https://github.com/kubecfg/kubecfg
+          const [hasKubecfg, str] = this.kubecfg(`show -o json ${args}`);
+          if (!hasKubecfg) {
+            throw e;
+          }
+          this.content = str;
+        }
       } catch (e) {
         const failure = new RuntimeFailure(e.message);
-        this.previewCache = this.previewCache.set(sourceUri, failure);
-        return failure;
+        this.content = failure;
+      } finally {
+        return this.content;
       }
-    }
-
-    public delete = (document: vs.TextDocument): void => {
-      const previewUri = document.uri.query.toString();
-      this.previewCache = this.previewCache.delete(previewUri);
-    }
+    };
 
     //
     // Document update API.
@@ -397,6 +356,24 @@ namespace jsonnet {
 
     public update = (uri: vs.Uri) => {
       this._onDidChange.fire(uri);
+    };
+
+    public parseFailed(): boolean {
+      return isRuntimeFailure(this.content);
+    }
+
+    //
+    // Private methods.
+    //
+
+    private kubecfg = (cmd: string): [boolean, string] => {
+      try {
+        execSync(`command -v kubecfg`);
+      } catch {
+        return [false, ""];
+      }
+
+      return [true, execSync(`kubecfg ${cmd}`).toString()]
     }
 
     //
@@ -404,7 +381,7 @@ namespace jsonnet {
     //
 
     private _onDidChange = new vs.EventEmitter<vs.Uri>();
-    private previewCache = im.Map<string, string | RuntimeFailure>();
+    private content: string | RuntimeFailure;
   }
 
   // DiagnosticProvider will consume the output of the Jsonnet CLI and
@@ -540,32 +517,24 @@ namespace display {
       return;
     }
 
-    const title = `Jsonnet preview '${path.basename(
-      editor.document.fileName
-    )}'`;
-
-    const panel = vs.window.createWebviewPanel(
-      "jsonnetPreview",
-      title,
-      getViewColumn(sideBySide) || vs.ViewColumn.One,
-      {}
-    );
-
-    function updateWebview(previewUri: vs.Uri) {
-      docProvider.provideTextDocumentContent(previewUri).then((html) => {
-        panel.webview.html = html;
+    openPreview(docProvider).then(doc => {
+      vs.window.showTextDocument(doc.uri, {
+        preview: true,
+        viewColumn: getViewColumn(sideBySide),
+        preserveFocus: true,
+        selection: new vs.Range(1, 1, 1, 1),
       });
-    }
+    });
+  };
 
-    docProvider.onDidChange(updateWebview);
+  // Open the preview with proper language mode
+  export const openPreview = (docProvider: jsonnet.DocumentProvider): Thenable<vs.TextDocument> => {
+    const language = docProvider.parseFailed() ? "plaintext" : workspace.outputFormat();
+    return vs.workspace.openTextDocument(jsonnet.canonicalPreviewUri())
+      .then((previewDoc) => vs.languages.setTextDocumentLanguage(previewDoc, language));
+  };
 
-    const previewUri = jsonnet.canonicalPreviewUri(editor.document.uri);
-    updateWebview(previewUri);
-  }
-
-  export const getViewColumn = (
-    sideBySide: boolean
-  ): vs.ViewColumn | undefined => {
+  const getViewColumn = (sideBySide: boolean): vs.ViewColumn | undefined => {
     const active = vs.window.activeTextEditor;
     if (!active) {
       return vs.ViewColumn.One;
@@ -583,7 +552,7 @@ namespace display {
     }
 
     return active.viewColumn;
-  }
+  };
 }
 
 export namespace ksonnet {
