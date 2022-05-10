@@ -76,7 +76,10 @@ namespace register {
         } else {
           diagProvider.clear(doc.uri);
         }
-        docProvider.update(jsonnet.canonicalPreviewUri());
+        docProvider.update(jsonnet.canonicalPreviewUri(doc.uri));
+        if (docProvider.docVisiable) {
+          display.previewJsonnet(docProvider, true);
+        }
       }
     }
 
@@ -96,14 +99,17 @@ namespace register {
       preview(active.document);
     }
 
-    // Reopen `preview` when its content changed.
     context.subscriptions.push(
-      vs.workspace.onDidChangeTextDocument((event) => {
-        if (event.document.uri.scheme == jsonnet.PREVIEW_SCHEME) {
-          display.openPreview(docProvider);
-        }
+      vs.window.onDidChangeVisibleTextEditors(editors => {
+        docProvider.docVisiable = false;
+        editors.forEach((editor) => {
+          if (editor.document.uri.scheme == jsonnet.PREVIEW_SCHEME) {
+            docProvider.docVisiable = true;
+            return;
+          }
+        });
       })
-    );
+    )
   }
 }
 
@@ -269,8 +275,8 @@ namespace jsonnet {
       clientOptions);
   }
 
-  export const canonicalPreviewUri = () => {
-    return vs.Uri.from({ scheme: PREVIEW_SCHEME, path: "jsonnet.preview" });
+  export const canonicalPreviewUri = (source: vs.Uri) => {
+    return vs.Uri.from({ scheme: PREVIEW_SCHEME, path: `${source.path}.preview` });
   }
 
   // RuntimeError represents a runtime failure in a Jsonnet program.
@@ -287,13 +293,15 @@ namespace jsonnet {
   // DocumentProvider compiles Jsonnet code to JSON or YAML, and
   // provides that to vscode for rendering
   export class DocumentProvider implements vs.TextDocumentContentProvider {
+    public docVisiable: boolean;
+
     public provideTextDocumentContent = (previewUri: vs.Uri): string => {
-      if (isRuntimeFailure(this.content)) {
-        return this.content.error;
+      if (isRuntimeFailure(this._content)) {
+        return this._content.error;
       }
 
       // kubecfg uses --- to separate resources
-      let raw = this.content as string;
+      let raw = this._content as string;
       if (raw.startsWith("---")) {
         raw = raw.replace("---", "[").replaceAll("---", ",") + "]";
       }
@@ -333,19 +341,23 @@ namespace jsonnet {
         const args = `${libPaths} ${extStrs} ${codePaths} ${sourceFile}`;
         if (jsonnet.kubecfgExecutable) {
           try {
-            this.content = execSync(`${jsonnet.kubecfgExecutable} show -o json ${args}`).toString();
+            this._content = execSync(`${jsonnet.kubecfgExecutable} show -o json ${args}`).toString();
           } catch {
-            this.content = execSync(`${jsonnet.executable} ${args}`).toString();
+            this._content = execSync(`${jsonnet.executable} ${args}`).toString();
           }
         } else {
-          this.content = execSync(`${jsonnet.executable} ${args}`).toString();
+          this._content = execSync(`${jsonnet.executable} ${args}`).toString();
         }
       } catch (e) {
-        this.content = new RuntimeFailure(e.message);
+        this._content = new RuntimeFailure(e.message);
       } finally {
-        return this.content;
+        return this._content;
       }
     };
+
+    public parseFailed(): boolean {
+      return isRuntimeFailure(this._content);
+    }
 
     //
     // Document update API.
@@ -359,16 +371,14 @@ namespace jsonnet {
       this._onDidChange.fire(uri);
     };
 
-    public parseFailed(): boolean {
-      return isRuntimeFailure(this.content);
-    }
-
     //
     // Private members.
     //
 
     private _onDidChange = new vs.EventEmitter<vs.Uri>();
-    private content: string | RuntimeFailure;
+    // _content stores the last active jsonnet file preview. There is at most 
+    // only one active editor at any time and we only cache for it.
+    private _content: string | RuntimeFailure;
   }
 
   // DiagnosticProvider will consume the output of the Jsonnet CLI and
@@ -504,20 +514,19 @@ namespace display {
       return;
     }
 
-    openPreview(docProvider).then(doc => {
+    openPreview(docProvider, editor.document.uri).then(doc => {
       vs.window.showTextDocument(doc.uri, {
         preview: true,
         viewColumn: getViewColumn(sideBySide),
         preserveFocus: true,
-        selection: new vs.Range(1, 1, 1, 1),
       });
     });
   };
 
   // Open the preview with proper language mode
-  export const openPreview = (docProvider: jsonnet.DocumentProvider): Thenable<vs.TextDocument> => {
+  export const openPreview = (docProvider: jsonnet.DocumentProvider, source: vs.Uri): Thenable<vs.TextDocument> => {
     const language = docProvider.parseFailed() ? "plaintext" : workspace.outputFormat();
-    return vs.workspace.openTextDocument(jsonnet.canonicalPreviewUri())
+    return vs.workspace.openTextDocument(jsonnet.canonicalPreviewUri(source))
       .then((previewDoc) => vs.languages.setTextDocumentLanguage(previewDoc, language));
   };
 
