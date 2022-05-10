@@ -78,4 +78,4 @@ keys:
   to be (_i.e._, allows you to either output JSON or YAML).
 
 [jsonnet]: http://jsonnet.org/ "Jsonnet"
-[jsonnet-demo]: https://raw.githubusercontent.com/huizhougit/vscode-jsonnet/master/images/kube-demo.gif
+[jsonnet-demo]: https://raw.githubusercontent.com/huizhougit/vscode-jsonnet-plus/master/images/kube-demo.gif
