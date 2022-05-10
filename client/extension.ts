@@ -110,6 +110,7 @@ namespace register {
 namespace workspace {
   const extStrsProp = "extStrs";
   const execPathProp = "executablePath";
+  const execKubecfgProp = "kubecfgExecutablePath";
 
   export const extStrs = (): string => {
     const extStrsObj = vs.workspace.getConfiguration('jsonnet')[extStrsProp];
@@ -153,42 +154,45 @@ namespace workspace {
     return vs.workspace.getConfiguration('jsonnet')["outputFormat"];
   }
 
-  export const configure = (config: vs.WorkspaceConfiguration): boolean => {
-    if (os.type() === "Windows_NT") {
-      return configureWindows(config);
-    } else {
-      return configureUnix(config);
-    }
+  export const configure = (config: vs.WorkspaceConfiguration) => {
+    isWindows() ? configureWindows(config) : configureUnix(config);
   }
 
-  const configureUnix = (config: vs.WorkspaceConfiguration): boolean => {
-    if (config[execPathProp] != null) {
+  const isWindows = (): boolean => {
+    return os.platform() === "win32";
+  }
+
+  const configureUnix = (config: vs.WorkspaceConfiguration) => {
+    if (config[execPathProp]) {
       jsonnet.executable = config[execPathProp];
     } else {
       try {
-        // If this doesn't throw, 'jsonnet' was found on
-        // $PATH.
-        //
-        // TODO: Probably should find a good non-shell way of
-        // doing this.
-        execSync(`which jsonnet`);
+        execSync(`command -v jsonnet`);
       } catch (e) {
         alert.jsonnetCommandNotOnPath();
-        return false;
       }
     }
 
-    return true;
+    if (config[execKubecfgProp]) {
+      jsonnet.kubecfgExecutable = config[execKubecfgProp];
+    } else {
+      try {
+        execSync(`command -v kubecfg`);
+        jsonnet.kubecfgExecutable = "kubecfg";
+      } catch {
+      }
+    }
+    
   }
 
-  const configureWindows = (config: vs.WorkspaceConfiguration): boolean => {
-    if (config[execPathProp] == null) {
+  const configureWindows = (config: vs.WorkspaceConfiguration) => {
+    if (config[execPathProp]) {
+      jsonnet.executable = config[execPathProp];
+    } else {
       alert.jsonnetCommandIsNull();
-      return false;
     }
 
-    jsonnet.executable = config[execPathProp];
-    return true;
+    jsonnet.kubecfgExecutable = config[execKubecfgProp];
   }
 }
 
@@ -218,6 +222,7 @@ namespace alert {
 
 namespace jsonnet {
   export let executable = "jsonnet";
+  export let kubecfgExecutable: string;
   export const PREVIEW_SCHEME = "jsonnet-preview";
   export const DOCUMENT_FILTER = {
     language: 'jsonnet',
@@ -300,14 +305,12 @@ namespace jsonnet {
     };
 
     public cachePreview = (sourceDoc: vs.TextDocument): RuntimeFailure | string => {
-      const sourceUri = sourceDoc.uri.toString();
       const sourceFile = sourceDoc.uri.fsPath;
 
       let codePaths = '';
 
       if (ksonnet.isInApp(sourceFile)) {
         const dir = path.dirname(sourceFile);
-        const paramsPath = path.join(dir, "params.libsonnet");
         const rootDir = ksonnet.rootPath(sourceFile);
         const envParamsPath = path.join(rootDir, "environments", "default", "params.libsonnet");
 
@@ -328,19 +331,17 @@ namespace jsonnet {
         const extStrs = workspace.extStrs();
         const libPaths = workspace.libPaths();
         const args = `${libPaths} ${extStrs} ${codePaths} ${sourceFile}`;
-        try {
-          this.content = execSync(`${jsonnet.executable} ${args}`).toString();
-        } catch (e) {
-          // If jsonnet doesn't work, let's try kubecfg https://github.com/kubecfg/kubecfg
-          const [hasKubecfg, str] = this.kubecfg(`show -o json ${args}`);
-          if (!hasKubecfg) {
-            throw e;
+        if (jsonnet.kubecfgExecutable) {
+          try {
+            this.content = execSync(`${jsonnet.kubecfgExecutable} show -o json ${args}`).toString();
+          } catch {
+            this.content = execSync(`${jsonnet.executable} ${args}`).toString();
           }
-          this.content = str;
+        } else {
+          this.content = execSync(`${jsonnet.executable} ${args}`).toString();
         }
       } catch (e) {
-        const failure = new RuntimeFailure(e.message);
-        this.content = failure;
+        this.content = new RuntimeFailure(e.message);
       } finally {
         return this.content;
       }
@@ -360,20 +361,6 @@ namespace jsonnet {
 
     public parseFailed(): boolean {
       return isRuntimeFailure(this.content);
-    }
-
-    //
-    // Private methods.
-    //
-
-    private kubecfg = (cmd: string): [boolean, string] => {
-      try {
-        execSync(`command -v kubecfg`);
-      } catch {
-        return [false, ""];
-      }
-
-      return [true, execSync(`kubecfg ${cmd}`).toString()]
     }
 
     //

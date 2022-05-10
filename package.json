@@ -98,6 +98,11 @@
             "json",
             "yaml"
           ]
+        },
+        "jsonnet.kubecfgExecutablePath": {
+          "default": null,
+          "description": "Location of the `kubecfg` executable.",
+          "type": "string"
         }
       },
       "title": "Jsonnet configuration",
