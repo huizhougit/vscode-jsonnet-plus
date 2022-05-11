@@ -342,17 +342,17 @@ namespace jsonnet {
         if (jsonnet.kubecfgExecutable) {
           try {
             this._content = execSync(`${jsonnet.kubecfgExecutable} show -o json ${args}`).toString();
-          } catch {
-            this._content = execSync(`${jsonnet.executable} ${args}`).toString();
-          }
-        } else {
+            if (this._content !== "") {
+              return this._content;
+            }
+          } catch {}
+
           this._content = execSync(`${jsonnet.executable} ${args}`).toString();
         }
       } catch (e) {
         this._content = new RuntimeFailure(e.message);
-      } finally {
-        return this._content;
       }
+      return this._content;
     };
 
     public parseFailed(): boolean {
