@@ -77,7 +77,11 @@ namespace register {
           diagProvider.clear(doc.uri);
         }
         docProvider.update(jsonnet.canonicalPreviewUri(doc.uri));
-        if (docProvider.docVisiable) {
+        
+        // When we close xxx.jsonnet.preview, the active editor could change to
+        // xxx.jsonnet. We check docProvider.activeSource to make sure the closed
+        // one not reopen itself.
+        if (docProvider.docVisiable && doc.uri != docProvider.activeSource) {
           display.previewJsonnet(docProvider, true);
         }
       }
@@ -91,7 +95,10 @@ namespace register {
 
     // Call `preview` any time we save or open or activate a document.
     context.subscriptions.push(vs.workspace.onDidSaveTextDocument(preview));
-    context.subscriptions.push(vs.window.onDidChangeActiveTextEditor(e => preview(e?.document)));
+    context.subscriptions.push(vs.window.onDidChangeActiveTextEditor(e => {
+      preview(e?.document);
+      //console.log(`jsonnetplus: onDidChangeActiveTextEditor ${e?.document.uri.path}`);
+    }));
 
     // Call `preview` when we open the editor.
     const active = vs.window.activeTextEditor;
@@ -102,8 +109,10 @@ namespace register {
     context.subscriptions.push(
       vs.window.onDidChangeVisibleTextEditors(editors => {
         docProvider.docVisiable = false;
+        //console.log(`jsonnetplus: onDidChangeVisibleTextEditors editors ${editors.length}`);
         editors.forEach((editor) => {
           if (editor.document.uri.scheme == jsonnet.PREVIEW_SCHEME) {
+            //console.log(`jsonnetplus: onDidChangeVisibleTextEditors ${active?.document.uri.path}`);
             docProvider.docVisiable = true;
             return;
           }
@@ -294,6 +303,7 @@ namespace jsonnet {
   // provides that to vscode for rendering
   export class DocumentProvider implements vs.TextDocumentContentProvider {
     public docVisiable: boolean;
+    public activeSource: vs.Uri;
 
     public provideTextDocumentContent = (previewUri: vs.Uri): string => {
       if (isRuntimeFailure(this._content)) {
@@ -331,7 +341,7 @@ namespace jsonnet {
           .map(k => `--ext-code-file "${k}"=${codeImports[k]}`)
           .join(' ');
 
-        console.log(codePaths);
+        //console.log(`jsonnetplus: ${codePaths}`);
       }
 
       try {
@@ -514,6 +524,7 @@ namespace display {
       return;
     }
 
+    docProvider.activeSource = editor.document.uri;
     openPreview(docProvider, editor.document.uri).then(doc => {
       vs.window.showTextDocument(doc.uri, {
         preview: true,
@@ -545,6 +556,8 @@ namespace display {
         return vs.ViewColumn.Two;
       case vs.ViewColumn.Two:
         return vs.ViewColumn.Three;
+      case vs.ViewColumn.Three:
+        return vs.ViewColumn.Four;
     }
 
     return active.viewColumn;
