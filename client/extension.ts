@@ -77,7 +77,7 @@ namespace register {
           diagProvider.clear(doc.uri);
         }
         docProvider.update(jsonnet.canonicalPreviewUri(doc.uri));
-        
+
         // When we close xxx.jsonnet.preview, the active editor could change to
         // xxx.jsonnet. We check docProvider.activeSource to make sure the closed
         // one not reopen itself.
@@ -135,7 +135,7 @@ namespace workspace {
         .map(key => `--ext-str ${key}="${extStrsObj[key]}"`)
         .join(" ");
   }
-  
+
   const expandPathVariables = (path: string): string => {
     return path.replace(/\${workspaceFolder}/g, vs.workspace.workspaceFolders?.[0].uri.fsPath || "");
   }
@@ -197,7 +197,7 @@ namespace workspace {
       } catch {
       }
     }
-    
+
   }
 
   const configureWindows = (config: vs.WorkspaceConfiguration) => {
@@ -310,16 +310,27 @@ namespace jsonnet {
         return this._content.error;
       }
 
-      // kubecfg uses --- to separate resources
-      let raw = this._content as string;
-      if (raw.startsWith("---")) {
-        raw = raw.replace("---", "[").replaceAll("---", ",") + "]";
-      }
+      try {
+        // kubecfg uses --- to separate resources
+        let raw = this._content as string;
+        if (raw.startsWith("---")) {
+          raw = raw.replace("---", "[");
+        }
+        if (raw[0] !== "[") {
+          raw = "[" + raw;
+        }
+        raw = raw.replaceAll("\n---\n", "\n,\n");
+        if (raw[raw.length - 1] !== "]") {
+          raw += "]";
+        }
 
-      const outputFormat = workspace.outputFormat();
-      return outputFormat == "yaml"
-        ? yaml.safeDump(JSON.parse(raw))
-        : JSON.stringify(JSON.parse(raw), null, 2);
+        const outputFormat = workspace.outputFormat();
+        return outputFormat == "yaml"
+          ? yaml.safeDump(JSON.parse(raw))
+          : JSON.stringify(JSON.parse(raw), null, 2);
+      } catch (e) {
+        return e.message;
+      }
     };
 
     public cachePreview = (sourceDoc: vs.TextDocument): RuntimeFailure | string => {
@@ -355,7 +366,7 @@ namespace jsonnet {
             if (this._content !== "") {
               return this._content;
             }
-          } catch {}
+          } catch { }
 
           this._content = execSync(`${jsonnet.executable} ${args}`).toString();
         }
